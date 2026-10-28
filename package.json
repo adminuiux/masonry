@@ -1,0 +1,57 @@
+{
+  "name": "@adminuiux/masonry",
+  "version": "1.0.0",
+  "description": "Production-ready, zero-dependency responsive masonry layout engine and fullscreen lightbox photo slider for Bootstrap 5 and vanilla JavaScript with touch-swipe navigation, multi-column spanning, and aspect ratio auto-alignment.",
+  "main": "dist/masonry.js",
+  "module": "dist/masonry.esm.js",
+  "browser": "dist/masonry.min.js",
+  "unpkg": "dist/masonry.min.js",
+  "jsdelivr": "dist/masonry.min.js",
+  "exports": {
+    ".": {
+      "import": "./dist/masonry.esm.js",
+      "require": "./dist/masonry.js",
+      "default": "./dist/masonry.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "masonry.png"
+  ],
+  "scripts": {
+    "test": "node test/masonry.test.js",
+    "build": "node scripts/build.js",
+    "version:sync": "node scripts/sync-version.js",
+    "zip": "node scripts/zip.js"
+  },
+  "keywords": [
+    "masonry",
+    "gallery",
+    "lightbox",
+    "photo-slider",
+    "touch-swipe",
+    "responsive-grid",
+    "vanilla-js",
+    "zero-dependencies",
+    "adminuiux",
+    "bootstrap-5"
+  ],
+  "author": "adminuiux.com",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/adminuiux/masonry.git"
+  },
+  "bugs": {
+    "url": "https://github.com/adminuiux/masonry/issues"
+  },
+  "homepage": "https://adminuiux.com/plugin-preview/masonry-plugin-preview.html",
+  "publishConfig": {
+    "access": "public"
+  }
+}
