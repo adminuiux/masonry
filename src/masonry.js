@@ -34,17 +34,22 @@
         const style = document.createElement('style');
         style.id = 'adminuiux-masonry-styles';
         style.textContent = `
-            .masonry-container {
+            .masonry-container,
+            .adminuiux-masonry {
                 position: relative;
                 width: 100%;
                 transition: height 0.3s ease;
             }
-            .masonry-container .masonry-item {
+            .masonry-container .masonry-item,
+            .masonry-container .adminuiux-masonry-item,
+            .adminuiux-masonry .adminuiux-masonry-item,
+            .adminuiux-masonry .masonry-item {
                 position: absolute;
                 box-sizing: border-box;
                 transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.3s ease, width 0.3s ease;
             }
-            .masonry-container[data-preview="true"] .masonry-item {
+            .masonry-container[data-preview="true"] .masonry-item,
+            .adminuiux-masonry[data-preview="true"] .adminuiux-masonry-item {
                 cursor: pointer;
             }
 
@@ -94,7 +99,7 @@
                 justify-content: space-between;
                 padding: 1rem 1.5rem;
                 color: #ffffff;
-                z-index: 2;
+                z-index: 3;
                 flex-shrink: 0;
                 background: transparent !important;
                 position: relative;
@@ -148,7 +153,6 @@
             .adminuiux-lightbox-btn:hover {
                 background: rgba(255, 255, 255, 0.28);
                 color: #ffffff;
-                transform: scale(1.06);
             }
             .adminuiux-lightbox-btn.active {
                 background: var(--adminuiux-primary, #3b82f6);
@@ -656,17 +660,46 @@
 
             // Options parsing from data attributes or config object
             const ds = this.container.dataset || {};
+            let responsiveMap = null;
+            if (options.responsive) {
+                responsiveMap = options.responsive;
+            } else if (ds.responsive) {
+                try {
+                    responsiveMap = typeof ds.responsive === 'string' ? JSON.parse(ds.responsive) : ds.responsive;
+                } catch (e) { }
+            }
+
+            // Determine default item selector: prefer .adminuiux-masonry-item if present, else .masonry-item
+            let defaultItemSelector = '.adminuiux-masonry-item, .masonry-item';
+
+            // Support singular and plural data attributes: data-columns, data-column, data-cols, data-col
+            const parsedCols = parseInt(
+                options.columns || options.column || options.cols ||
+                ds.columns || ds.column || ds.cols || ds.col || 3,
+                10
+            );
+
+            const hasExplicitBreakpoints = Boolean(
+                options.colsXs || ds.colsXs ||
+                options.colsSm || ds.colsSm ||
+                options.colsMd || ds.colsMd ||
+                options.colsLg || ds.colsLg ||
+                options.colsXl || ds.colsXl
+            );
+
             this.options = {
-                columns: parseInt(options.columns || ds.columns || 3, 10),
+                columns: parsedCols,
                 gap: parseInt(options.gap || ds.gap || 16, 10),
                 preview: options.preview !== undefined ? options.preview : (ds.preview === 'true' || ds.preview === ''),
                 thumbPreview: options.thumbPreview !== undefined ? options.thumbPreview : (ds.thumbPreview !== 'false'),
-                itemSelector: options.itemSelector || '.masonry-item',
+                itemSelector: options.itemSelector || ds.itemSelector || defaultItemSelector,
+                responsive: responsiveMap,
+                hasExplicitBreakpoints: hasExplicitBreakpoints,
                 colsXs: parseInt(options.colsXs || ds.colsXs || 1, 10),
-                colsSm: parseInt(options.colsSm || ds.colsSm || 2, 10),
-                colsMd: parseInt(options.colsMd || ds.colsMd || 2, 10),
-                colsLg: parseInt(options.colsLg || ds.colsLg || 3, 10),
-                colsXl: parseInt(options.colsXl || ds.colsXl || options.columns || ds.columns || 3, 10),
+                colsSm: parseInt(options.colsSm || ds.colsSm || Math.min(2, parsedCols), 10),
+                colsMd: parseInt(options.colsMd || ds.colsMd || Math.min(2, parsedCols), 10),
+                colsLg: parseInt(options.colsLg || ds.colsLg || parsedCols, 10),
+                colsXl: parseInt(options.colsXl || ds.colsXl || parsedCols, 10),
                 ...options
             };
 
@@ -677,6 +710,7 @@
         }
 
         init() {
+            this.container.style.position = 'relative';
             this.container.classList.add('masonry-container');
             this.layout();
 
@@ -689,8 +723,14 @@
                 }
             });
 
+            // Delayed passes for webfont and image dimension stabilization
+            setTimeout(() => this.layout(), 120);
+            setTimeout(() => this.layout(), 400);
+
             // Window resize listener
-            window.addEventListener('resize', this.resizeHandler);
+            if (typeof window !== 'undefined') {
+                window.addEventListener('resize', this.resizeHandler);
+            }
 
             // Setup ResizeObserver if supported
             if (typeof ResizeObserver !== 'undefined') {
@@ -704,12 +744,53 @@
             }
         }
 
-        getResponsiveColumns(width) {
-            if (width < 576) return this.options.colsXs;
-            if (width < 768) return this.options.colsSm;
-            if (width < 992) return this.options.colsMd;
-            if (width < 1200) return this.options.colsLg;
-            return this.options.colsXl;
+        getResponsiveColumns(containerWidth) {
+            const viewportWidth = (typeof window !== 'undefined' && window.innerWidth) ? window.innerWidth : containerWidth;
+
+            // 1. Explicit responsive map (e.g. data-responsive='{"768": 2, "1024": 3}')
+            if (this.options.responsive && typeof this.options.responsive === 'object') {
+                const bps = Object.keys(this.options.responsive).map(Number).sort((a, b) => a - b);
+                const testWidth = viewportWidth;
+
+                if (testWidth < bps[0]) {
+                    const firstVal = parseInt(this.options.responsive[bps[0]], 10);
+                    return (firstVal > 1 && testWidth < 400 && containerWidth < 300) ? 1 : firstVal;
+                }
+                for (let i = 0; i < bps.length; i++) {
+                    const bp = bps[i];
+                    if (testWidth < bp) {
+                        return parseInt(this.options.responsive[bp], 10);
+                    }
+                }
+                return this.options.columns || 3;
+            }
+
+            // 2. Explicit breakpoint options (e.g. data-cols-xs="1", data-cols-md="3")
+            if (this.options.hasExplicitBreakpoints) {
+                if (viewportWidth < 576) return this.options.colsXs;
+                if (viewportWidth < 768) return this.options.colsSm;
+                if (viewportWidth < 992) return this.options.colsMd;
+                if (viewportWidth < 1200) return this.options.colsLg;
+                return this.options.colsXl;
+            }
+
+            // 3. Default: Honor data-columns / data-column!
+            // When parent is smaller (sidebar, card, nested column), do NOT collapse to 1 column
+            // unless container is genuinely too small to fit the columns (e.g. < 45px per column).
+            const requested = this.options.columns || 3;
+            const gap = this.options.gap || 0;
+            const minColWidth = 45;
+
+            // On mobile phones (< 576px screen width), if container is full mobile width, clamp to at most 2
+            if (viewportWidth < 576 && containerWidth < 340 && requested > 2) {
+                return 2;
+            }
+
+            let safeCols = requested;
+            while (safeCols > 1 && Math.floor((containerWidth - (safeCols - 1) * gap) / safeCols) < minColWidth) {
+                safeCols--;
+            }
+            return Math.max(1, safeCols);
         }
 
         layout() {
@@ -773,19 +854,25 @@
                 if (aspectAttr && aspectAttr.includes('/')) {
                     const [wRatio, hRatio] = aspectAttr.split('/').map(Number);
                     if (wRatio && hRatio) {
-                        const imgHeight = (actualWidth / wRatio) * hRatio;
+                        const calcHeight = Math.round((actualWidth / wRatio) * hRatio);
+                        item.style.height = `${calcHeight}px`;
                         if (img) {
-                            img.style.height = `${imgHeight}px`;
+                            img.style.height = '100%';
                             img.style.width = '100%';
                             img.style.objectFit = 'cover';
                         }
-                        itemHeight = item.offsetHeight || imgHeight;
+                        itemHeight = calcHeight;
                     }
-                } else if (img && img.naturalWidth && img.naturalHeight) {
-                    const calculatedImgHeight = (actualWidth / img.naturalWidth) * img.naturalHeight;
-                    itemHeight = item.offsetHeight || calculatedImgHeight;
                 } else {
-                    itemHeight = item.offsetHeight || actualWidth * 0.75;
+                    item.style.height = ''; // Content determines natural height
+                    itemHeight = item.offsetHeight;
+                    if ((!itemHeight || itemHeight < 30) && img) {
+                        if (img.naturalWidth && img.naturalHeight) {
+                            itemHeight = Math.round((actualWidth / img.naturalWidth) * img.naturalHeight);
+                        } else {
+                            itemHeight = Math.round(actualWidth * 0.75);
+                        }
+                    }
                 }
 
                 // Update column heights
@@ -794,7 +881,7 @@
                 }
             });
 
-            const totalHeight = Math.max(...colHeights);
+            const totalHeight = Math.max(...colHeights, 0);
             this.container.style.height = `${Math.max(0, totalHeight - (totalHeight > 0 ? gap : 0))}px`;
         }
 
@@ -818,8 +905,8 @@
                         src: el.getAttribute('data-src') || (img ? img.src : ''),
                         thumb: (img ? img.src : '') || el.getAttribute('data-src'),
                         title: el.getAttribute('data-caption') || el.getAttribute('data-title') || (img ? img.alt : 'Gallery Photo'),
-                        category: el.getAttribute('data-category') || '',
-                        description: el.getAttribute('data-description') || ''
+                        category: el.getAttribute('data-category') || (el.querySelector('.badge') ? el.querySelector('.badge').textContent.trim() : ''),
+                        description: el.getAttribute('data-description') || (el.querySelector('p') ? el.querySelector('p').textContent.trim() : '')
                     };
                 });
 
@@ -841,8 +928,40 @@
             };
         }
 
+        setColumns(cols) {
+            this.options.columns = parseInt(cols, 10);
+            this.options.responsive = null;
+            this.options.hasExplicitBreakpoints = false;
+            this.layout();
+        }
+
+        addItem(el) {
+            if (typeof el === 'string') {
+                const temp = document.createElement('div');
+                temp.innerHTML = el.trim();
+                el = temp.firstElementChild;
+            }
+            if (!el || !this.container) return null;
+            this.container.appendChild(el);
+            const imgs = el.querySelectorAll('img');
+            imgs.forEach(img => {
+                if (!img.complete) {
+                    img.addEventListener('load', () => this.layout());
+                    img.addEventListener('error', () => this.layout());
+                }
+            });
+            this.layout();
+            return el;
+        }
+
+        refresh() {
+            this.layout();
+        }
+
         destroy() {
-            window.removeEventListener('resize', this.resizeHandler);
+            if (typeof window !== 'undefined') {
+                window.removeEventListener('resize', this.resizeHandler);
+            }
             if (this.ro) this.ro.disconnect();
         }
     }
@@ -873,7 +992,7 @@
         const doc = root || (typeof document !== 'undefined' ? document : null);
         if (!doc) return [];
 
-        const containers = doc.querySelectorAll('.masonry-container, [data-masonry]');
+        const containers = doc.querySelectorAll('.adminuiux-masonry, [data-adminuiux-masonry], .masonry-container, [data-masonry]');
         const instances = [];
 
         containers.forEach(container => {
@@ -886,6 +1005,16 @@
                 instances.push(instance);
             }
         });
+
+        // Tab change listener (Bootstrap tabs)
+        if (!doc._hasAdminUIUXMasonryTabListener && typeof document !== 'undefined') {
+            doc._hasAdminUIUXMasonryTabListener = true;
+            document.addEventListener('shown.bs.tab', () => {
+                setTimeout(() => {
+                    instances.forEach(inst => inst.layout());
+                }, 50);
+            });
+        }
 
         // Also wire any element with [data-gallery-lightbox]
         const standaloneLightboxTriggers = doc.querySelectorAll('[data-gallery-lightbox]');
