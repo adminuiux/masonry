@@ -18,12 +18,14 @@
 ## 🌟 Features
 
 - **Zero External Dependencies**: Pure vanilla JavaScript without jQuery, Isotope, or PhotoSwipe.
-- **Shortest-Column Bin-Packing**: Computes column layout with minimal gaps and smooth transitions.
-- **Auto-aligning Aspect Ratios**: Set `data-aspect-ratio="16/9"` or `"4/3"` or `"1/1"` on items to precompute heights before images load.
-- **Multi-Column Spanning**: Feature large images with `data-span="2"` that intelligently span across adjacent columns.
+- **Shortest-Column Bin-Packing**: Computes column layout with minimal gaps, nested parent container awareness, and smooth transitions.
+- **Auto-aligning Aspect Ratios**: Set `data-aspect-ratio="16/9"` or `"4/3"` or `"1/1"` on items to precompute heights with pixel precision.
+- **Multi-Column Spanning**: Feature large editorial items with `data-span="2"` that intelligently span across adjacent columns.
 - **Built-in Interactive Lightbox**: Seamless fullscreen photo slider with animated `.backdrop`, keyboard controls (`ArrowLeft`, `ArrowRight`, `Escape`), and image download.
 - **Touch-Swipe Detection**: High-precision mobile swipe gesture support for fluid photo browsing.
 - **Thumbnail Preview Controls**: Configurable thumbnail preview strip with `data-thumb-preview="true|false"`.
+- **Dynamic JavaScript API**: Live column switching (`setColumns`), dynamic item insertion (`addItem`), and manual recalculation (`layout` / `refresh`).
+- **Bootstrap 5 Tabs Integration**: Automatically detects tab switching (`shown.bs.tab`) and recalculates layout without zero-height collapsing.
 - **CSS Variable Color Integration**: Integrates directly with `--adminuiux-primary` and Bootstrap 5 theme tokens.
 - **Universal Distribution**: UMD, ESM, CommonJS, and Browser `<script>` tags.
 
@@ -90,23 +92,28 @@ Any collection of elements can trigger the fullscreen photo slider without using
 
 ## ⚙️ Configuration & Data Attributes
 
+The plugin automatically initializes any container with `.adminuiux-masonry`, `[data-adminuiux-masonry]`, `.masonry-container`, or `[data-masonry]`.
+
 | Attribute | Target | Type | Default | Description |
 | :--- | :--- | :--- | :--- | :--- |
-| `data-columns` | Container | `number` | `3` | Default number of columns on desktop viewports. |
+| `data-columns` / `data-column` | Container | `number` | `3` | Number of columns. Also accepts aliases `data-cols` and `data-col`. |
 | `data-gap` | Container | `number` | `16` | Gap between masonry items in pixels. |
+| `data-responsive` | Container | `JSON string` | `null` | Responsive breakpoint map, e.g. `'{"576": 2, "992": 4}'`. |
 | `data-preview` | Container | `boolean` | `true` | Enables interactive fullscreen photo slider on click. |
 | `data-thumb-preview` | Container / Item | `boolean` | `true` | Show or hide the bottom thumbnail rail in preview. |
+| `data-item-selector` | Container | `string` | auto | Item selector (`.adminuiux-masonry-item, .masonry-item`). |
 | `data-cols-xs` | Container | `number` | `1` | Column count on screens `< 576px`. |
 | `data-cols-sm` | Container | `number` | `2` | Column count on screens `576px – 767px`. |
 | `data-cols-md` | Container | `number` | `2` | Column count on screens `768px – 991px`. |
 | `data-cols-lg` | Container | `number` | `3` | Column count on screens `992px – 1199px`. |
 | `data-cols-xl` | Container | `number` | `3` | Column count on screens `>= 1200px`. |
-| `data-aspect-ratio` | Item | `string` | `auto` | Aspect ratio hint (`"16/9"`, `"4/3"`, `"1/1"`, `"3/4"`). |
+| `data-aspect-ratio` | Item | `string` | `auto` | Aspect ratio hint (`"16/9"`, `"4/3"`, `"1/1"`, `"3/4"`). Precomputes item height. |
 | `data-span` | Item | `number` | `1` | Column span count (e.g. `2` to span across two columns). |
 | `data-caption` | Item | `string` | `alt text` | Slide title displayed in the lightbox. |
 | `data-category` | Item | `string` | `""` | Category badge text in the lightbox. |
 | `data-description` | Item | `string` | `""` | Detailed description text in the lightbox. |
 | `data-src` | Item | `string` | `img.src` | High-resolution image source for lightbox inspection. |
+| `data-gallery-lightbox`| Standalone Element| `string` | `""` | Group name for standalone elements to open in lightbox. |
 
 ---
 
@@ -114,18 +121,34 @@ Any collection of elements can trigger the fullscreen photo slider without using
 
 ```javascript
 // Initialize programmatic instance
-const container = document.querySelector('.masonry-container');
+const container = document.querySelector('.adminuiux-masonry');
 const masonry = new AdminUIUXMasonry(container, {
-    columns: 4,
+    columns: 3,
     gap: 20,
     preview: true,
-    thumbPreview: true
+    thumbPreview: true,
+    responsive: {
+        576: 2,
+        992: 3,
+        1200: 4
+    }
 });
 
-// Force relayout after dynamic DOM changes
-masonry.layout();
+// Change column count dynamically (e.g., from interactive buttons)
+masonry.setColumns(4);
 
-// Destroy instance and remove listeners
+// Dynamically add a new card element or HTML string
+masonry.addItem(`
+    <div class="adminuiux-masonry-item card border-0 shadow-sm" data-caption="Dynamic Card">
+        <img src="path/to/img.jpg" class="card-img-top">
+        <div class="card-body p-3"><h6>New Story</h6></div>
+    </div>
+`);
+
+// Force relayout after dynamic DOM updates
+masonry.layout(); // or masonry.refresh();
+
+// Destroy instance and disconnect observers / event listeners
 masonry.destroy();
 
 // Open lightbox programmatically for any custom photo list
@@ -145,6 +168,9 @@ AdminUIUXMasonry.openLightbox([
         description: 'Sunset long exposure over tidal reef.'
     }
 ], 0, { thumbPreview: true });
+
+// Close active lightbox programmatically
+AdminUIUXMasonry.closeLightbox();
 ```
 
 ---
